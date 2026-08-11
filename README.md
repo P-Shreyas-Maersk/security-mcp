@@ -20,7 +20,21 @@ The GitHub token used to fetch alerts is read from a **`.env` file inside the re
 
 ---
 
-## 1. Add a `.env` file with your GitHub token
+## 1. Clone and install dependencies
+
+Clone this repo and install Node.js dependencies before connecting the MCP server:
+
+```bash
+git clone https://github.com/P-Shreyas-Maersk/security-mcp.git
+cd security-mcp
+npm install
+```
+
+Use the absolute path to this folder when registering the MCP server in the steps below.
+
+---
+
+## 2. Add a `.env` file with your GitHub token
 
 The GitHub token is **not** passed as a CLI flag. Instead, create a `.env` file **inside the repo where you run `claude`** (i.e. the org repo you want to scan, not the `security-mcp` server folder).
 
@@ -53,7 +67,7 @@ Replace `YOUR_GITHUB_TOKEN` with a GitHub token that has permission to read Code
 
 ---
 
-## 2. Connect MCP to Claude Code
+## 3. Connect MCP to Claude Code
 
 From the same repo folder, add the MCP server (no token flag needed — `security-mcp` reads it from `.env` at runtime):
 
@@ -83,7 +97,7 @@ claude mcp add security-mcp -- node C:\Users\shreyas\workplace\experiment\code-v
 
 ---
 
-## 3. Verify MCP connection
+## 4. Verify MCP connection
 
 Run:
 
@@ -101,7 +115,7 @@ If the server is not connected, restart Claude Code and verify the MCP path and 
 
 ---
 
-## 4. Open Claude Code in the target repo
+## 5. Open Claude Code in the target repo
 
 Go to your org repo (the same folder containing your `.env` file):
 
@@ -135,7 +149,7 @@ claude
 
 ---
 
-## 5. Test the MCP manually
+## 6. Test the MCP manually
 
 Inside Claude Code, run this prompt:
 
@@ -183,7 +197,7 @@ Then restart Claude Code.
 
 ---
 
-## 6. Install the fix-vuls skill
+## 7. Install the fix-vuls skill
 
 This repo ships the skill prompt in [`fix-vuls.md`](fix-vuls.md). Do not copy the content by hand — copy or move that file into the skill or slash-command folder for your target repo and tool.
 
@@ -225,7 +239,7 @@ When the skill is updated here, re-copy `fix-vuls.md` to your target folder to p
 
 ---
 
-## 7. Run the final command
+## 8. Run the final command
 
 Inside Claude Code:
 
@@ -255,7 +269,7 @@ No commit, push, or PR was performed.
 
 ---
 
-## 8. Developer review
+## 9. Developer review
 
 After the remediation loop finishes, review the summary and local diff:
 
