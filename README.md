@@ -2,17 +2,19 @@
 
 This setup connects a custom `security-mcp` server to Claude Code so Claude can fetch GitHub Code Scanning alerts for the current repository and apply local patches.
 
-The lifecycle is intentionally limited:
+The `/fix-vuls` skill runs a remediation loop:
 
 ```text
 /fix-vuls
   → fetch open GitHub Code Scanning alerts
-  → map alerts to local files
+  → triage and classify each alert
+  → research CVEs (Spring Boot BOM first for dependency alerts)
   → apply minimal local patches
-  → stop
+  → validate with build and tests
+  → re-check alerts and repeat until done or blocked
 ```
 
-No branch, commit, push, PR, test run, build, or validation is performed by Claude.
+Claude does not commit, push, or open a PR unless you explicitly ask. The full skill prompt lives in [`fix-vuls.md`](fix-vuls.md) in this repo.
 
 The GitHub token used to fetch alerts is read from a **`.env` file inside the repo where `claude` is run** — it is never passed on the command line or committed to source control.
 
@@ -181,81 +183,45 @@ Then restart Claude Code.
 
 ---
 
-## 6. Create the Claude slash command
+## 6. Install the fix-vuls skill
 
-Inside the repo, create:
+This repo ships the skill prompt in [`fix-vuls.md`](fix-vuls.md). Do not copy the content by hand — copy or move that file into the skill or slash-command folder for your target repo and tool.
+
+**Claude Code slash command** — copy into the repo you scan:
 
 **macOS:**
 
 ```bash
-mkdir -p .claude/commands
-touch .claude/commands/fix-vuls.md
+mkdir -p your-org-repo/.claude/commands
+cp /absolute/path/to/security-mcp/fix-vuls.md your-org-repo/.claude/commands/fix-vuls.md
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-New-Item -ItemType Directory -Force .claude\commands
-New-Item -ItemType File -Force .claude\commands\fix-vuls.md
+New-Item -ItemType Directory -Force your-org-repo\.claude\commands
+Copy-Item C:\absolute\path\to\security-mcp\fix-vuls.md your-org-repo\.claude\commands\fix-vuls.md
 ```
 
-**Windows (Command Prompt):**
+**Cursor project skill** — copy into the repo you scan:
 
-```cmd
-mkdir .claude\commands
-type nul > .claude\commands\fix-vuls.md
+**macOS:**
+
+```bash
+mkdir -p your-org-repo/.cursor/skills/fix-vuls
+cp /absolute/path/to/security-mcp/fix-vuls.md your-org-repo/.cursor/skills/fix-vuls/SKILL.md
 ```
 
-Add this content to `.claude/commands/fix-vuls.md`:
+**Windows (PowerShell):**
 
-```md
-You are a local security remediation agent for this repository.
-
-Goal:
-Fetch open GitHub code scanning vulnerabilities for the current repo and apply safe fixes locally only.
-
-Use the Security MCP tools where available.
-
-Lifecycle:
-Your lifecycle ends immediately after applying patches locally.
-
-Steps:
-1. Detect the current GitHub owner/repo from git remote.
-2. Fetch open GitHub code scanning alerts for this repo.
-3. For each open alert, read:
-   - rule ID
-   - severity
-   - affected file
-   - affected line
-   - alert message
-   - code scanning location details
-4. Map each alert to the matching local source file.
-5. Apply the smallest safe patch that directly addresses the alert.
-6. Stop after patching.
-7. Summarize:
-   - alerts patched
-   - files changed
-   - alerts skipped
-   - reason for each skipped alert
-   - reminder that validation was not run
-
-Strict rules:
-- Do not create a branch.
-- Do not commit.
-- Do not push.
-- Do not create a PR.
-- Do not auto-merge.
-- Do not run tests.
-- Do not run build.
-- Do not run validation.
-- Do not run dependency audit.
-- Do not modify CI/CD configuration.
-- Do not suppress CodeQL/code scanning alerts unless the alert is clearly false positive and the local code change is unnecessary.
-- Do not delete tests.
-- Do not make broad refactors.
-- Do not change unrelated files.
-- Keep all fixes minimal and local.
+```powershell
+New-Item -ItemType Directory -Force your-org-repo\.cursor\skills\fix-vuls
+Copy-Item C:\absolute\path\to\security-mcp\fix-vuls.md your-org-repo\.cursor\skills\fix-vuls\SKILL.md
 ```
+
+Replace `/absolute/path/to/security-mcp` with the path where you cloned this repo, and `your-org-repo` with the repository you want to remediate.
+
+When the skill is updated here, re-copy `fix-vuls.md` to your target folder to pick up changes.
 
 ---
 
@@ -270,45 +236,36 @@ Inside Claude Code:
 Expected final behavior:
 
 ```text
-Applied local patches for 3 code scanning alerts.
+Remediation complete after 2 cycles.
 
-Files changed:
-- src/main/java/...
-- src/main/java/...
+Fixed:
+- Alert #4 (java/sql-injection) — src/main/java/.../Repository.java
+- Alert #7 (CVE-2024-XXXX) — root pom.xml Spring Boot 3.2.x → 3.2.y
 
-Skipped:
-- Alert #12 because affected file was generated code.
+Fixed locally, pending GitHub rescan:
+- Alert #9 (java/path-injection) — green build; push and wait for CodeQL rescan
 
-Stopped after applying patches locally.
+Blocked:
+- Alert #12 — generated code; cannot patch locally
 
-No tests, build, validation, branch, commit, push, or PR were performed.
+Build: mvn -B test — SUCCESS
+
+No commit, push, or PR was performed.
 ```
 
 ---
 
 ## 8. Developer review
 
-After Claude stops, the developer owns the next steps.
-
-Recommended manual checks:
+After the remediation loop finishes, review the summary and local diff:
 
 ```bash
 git diff
 ```
 
-Then run project-specific validation manually, for example:
+Claude runs build and tests during the loop, but confirm the results in your environment before committing.
 
-```bash
-mvn test
-```
-
-or:
-
-```bash
-npm test
-```
-
-If the changes look good, the developer can manually create a branch, commit, push, and PR using the normal team workflow.
+If the changes look good, create a branch, commit, push, and open a PR using your normal team workflow. GitHub Code Scanning alerts will update after the push and CodeQL rescan.
 
 ---
 
@@ -321,9 +278,9 @@ Claude detects GitHub repo
         ↓
 Security MCP fetches Code Scanning alerts
         ↓
-Claude applies minimal local patches
+Claude triages, researches CVEs, patches, and validates (loop)
         ↓
-Claude stops
+Claude reports summary (fixed / blocked / pending rescan)
         ↓
-Developer reviews, tests, commits, and raises PR manually
+Developer reviews diff, commits, pushes, and raises PR manually
 ```
